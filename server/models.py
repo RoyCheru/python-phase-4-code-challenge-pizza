@@ -36,8 +36,10 @@ class Pizza(db.Model, SerializerMixin):
     ingredients = db.Column(db.String)
 
     # add relationship
-
+    restaurant_pizzas = db.relationship("RestaurantPizza", back_populates="pizza")
+    
     # add serialization rules
+    serialize_rules = ("restaurant_pizzas",)
 
     def __repr__(self):
         return f"<Pizza {self.name}, {self.ingredients}>"
@@ -50,10 +52,17 @@ class RestaurantPizza(db.Model, SerializerMixin):
     price = db.Column(db.Integer, nullable=False)
 
     # add relationships
-
+    restaurant_id = db.Column(db.Integer, db.ForeignKey("restaurants.id"))
+    restaurant = db.relationship("Restaurant", back_populates="restaurant_pizzas")
     # add serialization rules
-
+    serialize_rules = ("restaurant",)
     # add validation
-
+    @validates("price")
+    def validate_price(self, key, price):
+        if not isinstance(price, int) or price < 1 or price > 30:
+            raise ValueError("Price must be an integer between 1 and 30")
+        return price
+    pizza_id = db.Column(db.Integer, db.ForeignKey("pizzas.id"))
+    pizza = db.relationship("Pizza", back_populates="restaurant_pizzas")
     def __repr__(self):
         return f"<RestaurantPizza ${self.price}>"
