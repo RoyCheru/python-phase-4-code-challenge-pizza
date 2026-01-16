@@ -27,58 +27,97 @@ def index():
 @app.route("/restaurants", methods=["GET"])
 def get_restaurants():
     restaurants = Restaurant.query.all()
-    response = [restaurant.to_dict() for restaurant in restaurants]
+
+    response = [
+        restaurant.to_dict(only=("id", "name", "address"))
+        for restaurant in restaurants
+    ]
+
     return make_response(response, 200)
+
 
 @app.route("/restaurants/<int:id>", methods=["GET"])
 def get_restaurant(id):
-    try:
-        restaurant = Restaurant.query.get(id)
-        return make_response(restaurant.to_dict(), 200)
-    except:
+    restaurant = Restaurant.query.get(id)
+
+    if not restaurant:
         return make_response({"error": "Restaurant not found"}, 404)
+
+    response = restaurant.to_dict(
+        only=("id", "name", "address"),
+        include={
+            "restaurant_pizzas": {
+                "only": ("id", "price", "pizza_id", "restaurant_id"),
+                "include": {
+                    "pizza": {
+                        "only": ("id", "name", "ingredients")
+                    }
+                }
+            }
+        }
+    )
+
+    return make_response(response, 200)
+
+@app.route("/restaurants/<int:id>", methods=["DELETE"])
+def delete_restaurant(id):
+    restaurant = Restaurant.query.get(id)
+
+    if not restaurant:
+        return make_response({"error": "Restaurant not found"}, 404)
+
+    db.session.delete(restaurant)
+    db.session.commit()
+
+    return make_response("", 204)
+
 
 @app.route("/pizzas", methods=["GET"])
 def get_pizzas():
     pizzas = Pizza.query.all()
-    response = [pizza.to_dict() for pizza in pizzas]
+
+    response = [
+        pizza.to_dict(only=("id", "name", "ingredients"))
+        for pizza in pizzas
+    ]
+
     return make_response(response, 200)
+
 
 @app.route("/restaurant_pizzas", methods=["POST"])
 def create_restaurant_pizza():
     data = request.get_json()
-    
+
     try:
-        new_restaurant_pizza = RestaurantPizza(
+        restaurant_pizza = RestaurantPizza(
             price=data["price"],
-            restaurant_id=data["restaurant_id"],
-            pizza_id=data["pizza_id"]
+            pizza_id=data["pizza_id"],
+            restaurant_id=data["restaurant_id"]
         )
-        db.session.add(new_restaurant_pizza)
+
+        db.session.add(restaurant_pizza)
         db.session.commit()
-        return make_response(new_restaurant_pizza.to_dict(), 201)
-    except ValueError as e:
-        return make_response({"errors": [str(e)]}, 400)
 
-@app.route("/restaurant_pizzas/<int:id>", methods=["PATCH"])
-def update_restaurant_pizza(id):
-    data = request.get_json()
-    restaurant_pizza = RestaurantPizza.query.get(id)
-    if "price" in data:
-        restaurant_pizza.price = data["price"]
-    db.session.commit()
-    return make_response(restaurant_pizza.to_dict(), 200)
+        response = restaurant_pizza.to_dict(
+            only=("id", "price", "pizza_id", "restaurant_id"),
+            include={
+                "pizza": {
+                    "only": ("id", "name", "ingredients")
+                },
+                "restaurant": {
+                    "only": ("id", "name", "address")
+                }
+            }
+        )
 
-@app.route("/restaurant_pizzas/<int:id>", methods=["DELETE"])
-def delete_restaurant_pizza(id):
-    try:
-        restaurant_pizza = RestaurantPizza.query.get(id)
-        db.session.delete(restaurant_pizza)
-        db.session.commit()
-        return make_response({}, 204)
-    except:
-        return make_response({"error": "RestaurantPizza not found"}, 404)
+        return make_response(response, 201)
 
+    except Exception:
+        db.session.rollback()
+        return make_response(
+            {"errors": ["validation errors"]},
+            400
+        )
 
 
 
